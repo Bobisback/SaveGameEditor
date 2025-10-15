@@ -1,0 +1,12 @@
+python rt_full_regen_lastgood.py \
+  --in "quicksave-11.sfs" \
+  --mm "ModuleManager.ConfigCache" \
+  --fgi "JNSQ Body Indexes.txt" \
+  --groups "kerbin_distance_ranges - kerbin_distance_ranges_ALL_BODIES_from_NewestMM_1-11_gs.csv.csv" \
+  --netdb "rt_netdb_expanded.json" \
+  --outdir "./out"
+
+
+
+
+python build_rt_netdb_expanded.py --mm "ModuleManager.ConfigCache" --csv "kerbin_distance_ranges.csv" --out "rt_netdb_expanded.json"
