@@ -60,7 +60,7 @@ def main(args):
 
     # 1) Celestial radii from MM cache
     body_radius = {}
-    for (s,e,blk,_) in find_blocks(mm_txt, "CelestialBody"):
+    for (s,e,blk,_) in find_blocks(mm_txt, "Body"):
         nm = grab(blk, "name") or grab(blk,"Name")
         if not nm: continue
         props = find_blocks(blk, "Properties")
