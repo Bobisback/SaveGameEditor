@@ -124,10 +124,18 @@ def grab(txt, key):
     m=re.search(rf'(^|\n)\s*{re.escape(key)}\s*=\s*([^\r\n#]+)', txt)
     return m.group(2).strip() if m else None
 
-def parse_selected_groups(sel):
+# --- Group selection helper (defined early so it's available when called) ---
+_group_label = re.compile(r'^\s*(?:Group\s+|G)?(\d+)\s*$', re.IGNORECASE)
+
+def parse_selected_groups(sel, *, infer_all="from_seeds"):
+    """
+    Return a sorted list of positive group indices.
+    Accepts 'all', 'Group N', 'G<N>', or explicit integers.
+    infer_all: 'from_seeds' (default) or 'from_csv' to decide what 'all' means.
+    """
     if isinstance(sel, str) and sel.lower() == "all":
-        # infer from seeds in the save by default
-        return sorted(set(seed_kerbin.keys()) | set(seed_other.keys()))
+        # default: infer from seeds present in the save (names defined later in the file)
+        return sorted(set(seed_kerbin.keys()) | set(seed_other.keys())) if "seed_kerbin" in globals() else []
     out = []
     for item in (sel or []):
         if isinstance(item, int):
@@ -144,7 +152,6 @@ def parse_selected_groups(sel):
         out.append(gi)
     return sorted(set(out))
 
-_group_label = re.compile(r'^\s*(?:Group\s+|G)?(\d+)\s*$', re.IGNORECASE)
 
 # ----------------------- Load CSV groups & update DB -----------------------
 dfg = pd.read_csv(GROUPS_CSV)
