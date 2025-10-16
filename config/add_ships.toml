@@ -21,15 +21,13 @@ placements_csv    = "placements_quicksave11.csv"
 zip_name          = "quicksave #11.zip"
 
 [deploy]
-# Which spreadsheet Groups to deploy:
-#   "all" : deploy every row in the spreadsheet (default)
-#   [..]  : only these Groups by name, e.g. ["Group 1","Group 3","Group 7"]
-# Names must match the spreadsheet’s "Group n" column values.
+# Which Groups to deploy:
+#   - "all" : deploy every available Group (by default inferred from seed vessels present in the save)
+#   - [..]  : list of group labels or numbers, e.g. ["Group 1","Group 3","G12", 15]
+#             Accepted forms per item: "Group N", "G<N>", or a positive integer N
 groups = "all"
-# groups = ["Group 1", "Group 3", "Group 7"]
 
-# NOTE: Seed ship naming is fixed in code and not configurable here.
-# The code detects seeds with:
-#   Commsat-Kerbin-G([1-n])
-#   Commsat-Other-G([1-n])
-# Keep your seed vessel names matching those regexes.
+# NOTE: Seed/template names are fixed in code and must match:
+#   Commsat-Kerbin-G<number>
+#   Commsat-Other-G<number>
+# Examples: Commsat-Kerbin-G1, Commsat-Other-G12
