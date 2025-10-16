@@ -6,19 +6,95 @@ import os, re, json, math, uuid, random, csv, zipfile, time
 import pandas as pd
 from collections import defaultdict
 
-# ----------------------- Paths -----------------------
-SFS_IN = "./inputs/quicksave #11.sfs"
-MMCACHE = "./inputs/ModuleManager.ConfigCache"
-FGI_PATH = "./inputs/JNSQ Body Indexes.txt"
-GROUPS_CSV = "./inputs/kerbin_distance_ranges.csv"
-NETDB_EXP = "./outputs/rt_netdb_expanded.json"
+# --- Settings loader (TOML) -----------------------------------------------
+import argparse, sys
+from dataclasses import dataclass
 
-OUT_DIR = "./outputs"
+# Python 3.11+ has tomllib; fallback to tomli if needed
+try:
+    import tomllib  # py311+
+except Exception:
+    tomllib = None
+try:
+    import tomli  # fallback
+except Exception:
+    tomli = None
+
+def _load_toml(path: str) -> dict:
+    with open(path, "rb") as f:
+        if tomllib:
+            return tomllib.load(f)
+        if tomli:
+            return tomli.load(f)
+        raise RuntimeError("No TOML loader available (need Python 3.11+ or install tomli)")
+
+@dataclass
+class Config:
+    sfs_in: str
+    mmcache: str
+    fgi_path: str
+    groups_csv: str
+    netdb_expanded: str
+    out_dir: str
+    groups_index_json: str
+    groups_diff_csv: str
+    groups_curr_csv: str
+    placements_csv: str
+    zip_name: str
+
+    @staticmethod
+    def with_defaults(d: dict) -> "Config":
+        inp = d.get("inputs", {})
+        out = d.get("outputs", {})
+        data = d.get("data", {})
+        out_files = out.get("files", {})
+        return Config(
+            sfs_in          = inp.get("sfs_in",   "./inputs/quicksave #11.sfs"),
+            mmcache         = inp.get("mmcache",  "./inputs/ModuleManager.ConfigCache"),
+            fgi_path        = inp.get("fgi_path", "./inputs/JNSQ Body Indexes.txt"),
+            groups_csv      = inp.get("groups_csv", "./inputs/kerbin_distance_ranges.csv"),
+            netdb_expanded  = inp.get("netdb_expanded", "./outputs/rt_netdb_expanded.json"),
+
+            out_dir         = out.get("out_dir", "./outputs"),
+
+            groups_index_json = data.get("groups_index_json","./data/rt_groups_index.json"),
+
+            groups_diff_csv = out_files.get("groups_diff_csv","group_map_diff.csv"),
+            groups_curr_csv = out_files.get("groups_curr_csv","group_map_current.csv"),
+            placements_csv  = out_files.get("placements_csv","placements_quicksave11.csv"),
+            zip_name        = out_files.get("zip_name","quicksave #11.zip"),
+        )
+
+def load_config() -> Config:
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("--config", help="Path to TOML settings file")
+    args, _ = p.parse_known_args()
+
+    cfg_path = args.config or os.environ.get("ADDSHIPS_CONFIG") or "config/add_ships.toml"
+    if os.path.exists(cfg_path):
+        d = _load_toml(cfg_path)
+        return Config.with_defaults(d)
+    # Fall back to pure defaults (matches previous hard-coded values)
+    return Config.with_defaults({})
+# --------------------------------------------------------------------------
+
+# ----------------------- Paths -----------------------
+# ----------------------- Paths (from settings) -----------------------
+cfg = load_config()
+
+SFS_IN   = cfg.sfs_in
+MMCACHE  = cfg.mmcache
+FGI_PATH = cfg.fgi_path
+GROUPS_CSV = cfg.groups_csv
+NETDB_EXP = cfg.netdb_expanded
+
+OUT_DIR = cfg.out_dir
 os.makedirs(OUT_DIR, exist_ok=True)
 
-GROUPS_JSON = "./data/rt_groups_index.json"
-GROUPS_DIFF_CSV = os.path.join(OUT_DIR, "group_map_diff.csv")
-GROUPS_CURR_CSV = os.path.join(OUT_DIR, "group_map_current.csv")
+GROUPS_JSON     = cfg.groups_index_json
+GROUPS_DIFF_CSV = os.path.join(OUT_DIR, cfg.groups_diff_csv)
+GROUPS_CURR_CSV = os.path.join(OUT_DIR, cfg.groups_curr_csv)
+
 
 # ----------------------- Guards -----------------------
 for p in [SFS_IN, MMCACHE, FGI_PATH, GROUPS_CSV]:

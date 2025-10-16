@@ -1,0 +1,21 @@
+# Paths for add_ships_full_run.py
+
+[inputs]
+sfs_in   = "./inputs/quicksave #11.sfs"
+mmcache  = "./inputs/ModuleManager.ConfigCache"
+fgi_path = "./inputs/JNSQ Body Indexes.txt"
+groups_csv = "./inputs/kerbin_distance_ranges.csv"
+netdb_expanded = "./outputs/rt_netdb_expanded.json"   # consumed by script
+
+[outputs]
+out_dir = "./outputs"
+
+[data]
+groups_index_json = "./data/rt_groups_index.json"
+
+# Optional: override derived filenames the script emits (kept here for convenience)
+[outputs.files]
+groups_diff_csv   = "group_map_diff.csv"
+groups_curr_csv   = "group_map_current.csv"
+placements_csv    = "placements_quicksave11.csv"
+zip_name          = "quicksave #11.zip"
