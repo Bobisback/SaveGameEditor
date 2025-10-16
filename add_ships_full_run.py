@@ -6,9 +6,11 @@ import os, re, json, math, uuid, random, csv, zipfile, time
 import pandas as pd
 from collections import defaultdict
 
+
 # --- Settings loader (TOML) -----------------------------------------------
-import argparse, sys
-from dataclasses import dataclass
+import argparse
+from dataclasses import dataclass, field
+from typing import List, Union, Dict
 
 # Python 3.11+ has tomllib; fallback to tomli if needed
 try:
@@ -29,6 +31,10 @@ def _load_toml(path: str) -> dict:
         raise RuntimeError("No TOML loader available (need Python 3.11+ or install tomli)")
 
 @dataclass
+class ConfigDeploy:
+    groups: Union[str, List[Union[str,int]]] = "all"   # "all" or e.g. ["Group 1","G12",15]
+
+@dataclass
 class Config:
     sfs_in: str
     mmcache: str
@@ -41,6 +47,7 @@ class Config:
     groups_curr_csv: str
     placements_csv: str
     zip_name: str
+    deploy: ConfigDeploy = field(default_factory=ConfigDeploy)
 
     @staticmethod
     def with_defaults(d: dict) -> "Config":
@@ -48,40 +55,36 @@ class Config:
         out = d.get("outputs", {})
         data = d.get("data", {})
         out_files = out.get("files", {})
+        deploy_cfg = d.get("deploy", {})
         return Config(
             sfs_in          = inp.get("sfs_in",   "./inputs/quicksave #11.sfs"),
             mmcache         = inp.get("mmcache",  "./inputs/ModuleManager.ConfigCache"),
             fgi_path        = inp.get("fgi_path", "./inputs/JNSQ Body Indexes.txt"),
             groups_csv      = inp.get("groups_csv", "./inputs/kerbin_distance_ranges.csv"),
             netdb_expanded  = inp.get("netdb_expanded", "./outputs/rt_netdb_expanded.json"),
-
             out_dir         = out.get("out_dir", "./outputs"),
-
             groups_index_json = data.get("groups_index_json","./data/rt_groups_index.json"),
-
             groups_diff_csv = out_files.get("groups_diff_csv","group_map_diff.csv"),
             groups_curr_csv = out_files.get("groups_curr_csv","group_map_current.csv"),
             placements_csv  = out_files.get("placements_csv","placements_quicksave11.csv"),
             zip_name        = out_files.get("zip_name","quicksave #11.zip"),
+            deploy = ConfigDeploy(
+                groups = deploy_cfg.get("groups", "all"),
+            ),
         )
 
 def load_config() -> Config:
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--config", help="Path to TOML settings file")
     args, _ = p.parse_known_args()
-
     cfg_path = args.config or os.environ.get("ADDSHIPS_CONFIG") or "config/add_ships.toml"
     if os.path.exists(cfg_path):
         d = _load_toml(cfg_path)
         return Config.with_defaults(d)
-    # Fall back to pure defaults (matches previous hard-coded values)
     return Config.with_defaults({})
 # --------------------------------------------------------------------------
-
-# ----------------------- Paths -----------------------
-# ----------------------- Paths (from settings) -----------------------
+# ----------------------- Paths (from config) -----------------------
 cfg = load_config()
-
 SFS_IN   = cfg.sfs_in
 MMCACHE  = cfg.mmcache
 FGI_PATH = cfg.fgi_path
@@ -94,7 +97,6 @@ os.makedirs(OUT_DIR, exist_ok=True)
 GROUPS_JSON     = cfg.groups_index_json
 GROUPS_DIFF_CSV = os.path.join(OUT_DIR, cfg.groups_diff_csv)
 GROUPS_CURR_CSV = os.path.join(OUT_DIR, cfg.groups_curr_csv)
-
 
 # ----------------------- Guards -----------------------
 for p in [SFS_IN, MMCACHE, FGI_PATH, GROUPS_CSV]:
@@ -121,6 +123,28 @@ def find_blocks(txt, token):
 def grab(txt, key):
     m=re.search(rf'(^|\n)\s*{re.escape(key)}\s*=\s*([^\r\n#]+)', txt)
     return m.group(2).strip() if m else None
+
+def parse_selected_groups(sel):
+    if isinstance(sel, str) and sel.lower() == "all":
+        # infer from seeds in the save by default
+        return sorted(set(seed_kerbin.keys()) | set(seed_other.keys()))
+    out = []
+    for item in (sel or []):
+        if isinstance(item, int):
+            gi = item
+        else:
+            m = _group_label.match(str(item))
+            if not m:
+                print(f"[warn] Unrecognized group label in config: {item!r} (expected 'Group N' or 'G<N>')")
+                continue
+            gi = int(m.group(1))
+        if gi <= 0:
+            print(f"[warn] Group index must be positive: {gi}")
+            continue
+        out.append(gi)
+    return sorted(set(out))
+
+_group_label = re.compile(r'^\s*(?:Group\s+|G)?(\d+)\s*$', re.IGNORECASE)
 
 # ----------------------- Load CSV groups & update DB -----------------------
 dfg = pd.read_csv(GROUPS_CSV)
@@ -396,12 +420,14 @@ for (s,e,vtxt,_) in vessels:
     m = re.search(r'(^|\n)\s*name\s*=\s*([^\r\n#]+)', vtxt)
     if not m: continue
     nm = m.group(2).strip()
-    mk = re.fullmatch(r"Commsat-Kerbin-G([1-7])", nm)
-    mo = re.fullmatch(r"Commsat-Other-G([1-7])", nm)
+    pat_k = re.compile(r"^Commsat-Kerbin-G(\d+)$"); pat_o = re.compile(r"^Commsat-Other-G(\d+)$"); mk = pat_k.fullmatch(nm); mo = pat_o.fullmatch(nm)
+    
     if mk: seed_kerbin[int(mk.group(1))]=(s,e,vtxt)
     if mo: seed_other[int(mo.group(1))]=(s,e,vtxt)
     existing_names.add(nm)
 
+
+selected_groups = parse_selected_groups(cfg.deploy.groups)
 missingK = [g for g in range(1,8) if g not in seed_kerbin]
 missingO = [g for g in range(1,8) if g not in seed_other]
 assert not missingK and not missingO, f"Missing seeds -> Kerbin:{missingK} Other:{missingO}"
@@ -439,7 +465,7 @@ def build_from(templ_vtxt, new_name, body, net_id, slot, scale_alt=1.0, group=No
     return nv
 
 # Kerbin hubs
-for g in range(1,8):
+for g in selected_groups:
     templ = seed_kerbin[g][2]; net_id = G_to_NET[g]
     for slot in (1,2,3,4):
         nm = f"Kerbin-G{g}-SAT{slot}-NET{net_id}"
@@ -448,7 +474,7 @@ for g in range(1,8):
         new_vessels_txt.append(build_from(templ, nm, "Kerbin", net_id, slot, 1.0, group=f"G{g}"))
 
 # Remote constellations
-for g in range(1,8):
+for g in selected_groups:
     templ = seed_other[g][2]
     for b in g_bodies[g]:
         for slot in (1,2,3,4):
@@ -510,7 +536,7 @@ else:
             w=csv.DictWriter(f, fieldnames=list(placements[0].keys()))
             w.writeheader()
             for r in placements: w.writerow(r)
-        zip_path = os.path.join(OUT_DIR, "quicksave #11.zip")
+        zip_path = os.path.join(OUT_DIR, cfg.zip_name)
         with zipfile.ZipFile(zip_path,"w",compression=zipfile.ZIP_DEFLATED) as z:
             z.write(out_sfs, arcname=os.path.basename(out_sfs))
             z.write(rep_csv, arcname=os.path.basename(rep_csv))

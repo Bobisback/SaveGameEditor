@@ -19,3 +19,17 @@ groups_diff_csv   = "group_map_diff.csv"
 groups_curr_csv   = "group_map_current.csv"
 placements_csv    = "placements_quicksave11.csv"
 zip_name          = "quicksave #11.zip"
+
+[deploy]
+# Which spreadsheet Groups to deploy:
+#   "all" : deploy every row in the spreadsheet (default)
+#   [..]  : only these Groups by name, e.g. ["Group 1","Group 3","Group 7"]
+# Names must match the spreadsheet’s "Group n" column values.
+groups = "all"
+# groups = ["Group 1", "Group 3", "Group 7"]
+
+# NOTE: Seed ship naming is fixed in code and not configurable here.
+# The code detects seeds with:
+#   Commsat-Kerbin-G([1-n])
+#   Commsat-Other-G([1-n])
+# Keep your seed vessel names matching those regexes.
